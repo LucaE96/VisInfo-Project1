@@ -1,0 +1,10 @@
+========================================================================
+Disegna 10 aeroplanini (è sufficiente la silhouette) distribuiti
+nell'area di disegno. Lo sfondo è azzurro e nell'area di disegno ci sono
+anche 10 nuvolette bianche. Quando l'utente clicca su un aeroplano con
+il pulsante sinistro del mouse e il tasto "x" premuto tutti gli
+aeroplani si muovono verso una nuova configurazione passando dietro alle
+nuvolette. Se invece il tasto "y" era premuto gli aeroplanini passano
+davanti alle nuvolette. Le 10 configurazioni possibili sono descritte in
+formato json, dopo la decima si torna alla prima. 
+========================================================================

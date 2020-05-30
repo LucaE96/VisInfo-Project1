@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Planes & Clouds</title>
+	<meta charset="utf-8">
+	<script type="text/javascript" src="d3/d3.min.js"></script>
+</head>
+<body>
+	<script type="text/javascript">
+
+		const numberOfPlanes = 10;
+		const numberOfClouds = 10;
+		
+		const default_workarea_width = 1200;	//DON'T change this! (needed to scale coordinates in the JSON correctly)
+		const default_workarea_height = 800;	//DON'T change this! (needed to scale coordinates in the JSON correctly)
+
+		const workarea_width = 1200;
+		const workarea_height = 800;
+
+		const plane_width = 
+			Math.min(workarea_width/8, workarea_height/2);
+		const plane_height = plane_width * 6/10;
+		const base_cloud_width = workarea_width/12;
+		const base_cloud_height = base_cloud_width * 2/3;
+		const cloud_max_size_multiplier = 
+			Math.min( (workarea_width/3)/base_cloud_width, (workarea_height)/base_cloud_height );
+		const reconfig_transition_duration = 3000;
+
+		function rng(min, max) {	// [min, max)
+			return Math.random() * (max-min) + min;
+		}	
+		
+		var cloudsSizeMultipliers = [];
+		for(var i=0; i<numberOfClouds; i++) {
+			cloudsSizeMultipliers.push(rng(1, cloud_max_size_multiplier));
+		}
+
+		function randomX(obj_width) {
+			var min = 0 
+			var max = workarea_width - obj_width 
+			return Math.round(rng(min, max))
+		}
+
+		function randomY(obj_height) {
+			var min = 0 
+			var max = workarea_height - obj_height 
+			return Math.round(rng(min, max))
+		}
+
+		var cloudsData = [];
+		for(var i=0; i<numberOfClouds; i++) {
+			var width = cloudsSizeMultipliers[i]*base_cloud_width;
+			var height = cloudsSizeMultipliers[i]*base_cloud_height;
+			cloudsData.push({"x":randomX(width), "y":randomY(height), "w":width, "h":height});
+		}
+
+		var planesData = [];
+		for(var i=0; i<numberOfPlanes; i++) {
+			planesData.push({"x":randomX(plane_width), "y":randomY(plane_height)});
+		}
+
+		var isHoldingX = false;
+		var isHoldingY = false;
+		
+		var workarea = d3.select("body")
+			.on("keydown", function() {
+				if (d3.event.keyCode == 88) {	//X
+					isHoldingX = true;
+				}
+				if (d3.event.keyCode == 89) {	//Y
+					isHoldingY = true;
+				}
+			})
+			.on("keyup", function() {
+				if (d3.event.keyCode == 88) {	//X
+					isHoldingX = false;
+				}
+				if (d3.event.keyCode == 89) {	//Y
+					isHoldingY = false;
+				}
+			})
+			.append("svg").style("background-color", "lightblue")
+			.attr("width", workarea_width).attr("height", workarea_height);		
+		
+		var clouds;
+		d3.xml("resources/cloud.svg").then(function(data) {
+			console.log(data.documentElement);
+			
+			clouds = workarea.selectAll(".cloud")
+				.data(cloudsData)
+				.enter()
+				.append(() => data.documentElement.cloneNode(true))
+				.attr("class", "cloud")
+				.attr("x", function(d) {return d.x})
+				.attr("y", function(d) {return d.y})
+				.attr("width", function(d) {return d.w})
+				.attr("height", function(d) {return d.h});
+		});
+
+		var planes;
+		d3.xml("resources/plane.svg").then(function(data) {
+			console.log(data.documentElement);
+			
+			planes = workarea.selectAll(".plane")
+				.data(planesData)
+				.enter()
+				.append(() => data.documentElement.cloneNode(true))
+				.attr("class", "plane")
+				.attr("x", function(d) {return d.x})
+				.attr("y", function(d) {return d.y})
+				.attr("width", plane_width)
+				.attr("height", plane_height)
+				.attr("fill", "#BBBBBB")
+				.attr("stroke", "black")
+				.on("click", function(d) { 
+					if(isHoldingX == true) {
+						clickedPlaneAndPressedX();
+					//'else' because I don't want it to fire both events at the same time
+					} else if(isHoldingY == true) {	
+						clickedPlaneAndPressedY();
+					}
+				});
+		});
+
+		var plane_configs;
+		d3.json("plane_configurations.json").then(function(data) {
+			console.log(data);
+			plane_configs = data;
+		});
+
+		var current_config = 0;
+		
+		function planesInFront() {
+			d3.timeout(function() {planes.raise();}, reconfig_transition_duration/2)
+		}
+
+		function planesInTheBack() {
+			d3.timeout(function() {planes.lower();}, reconfig_transition_duration/2)
+		}		
+
+		function scaleXToWorkarea(coord) {
+			var ratio = workarea_width/default_workarea_width;
+			return coord * ratio;
+		}
+		
+		function scaleYToWorkarea(coord) {
+			var ratio = workarea_height/default_workarea_height;
+			return coord * ratio;
+		}
+
+		function centerXToPlane(coord) {
+			coord = scaleXToWorkarea(coord);
+			return coord - plane_width/2;
+		}
+
+		function centerYToPlane(coord) {
+			coord = scaleYToWorkarea(coord);
+			return coord - plane_height/2;
+		}
+
+
+		/*function movePlanesToConfig(config_number) {
+			for(var i=0; i<plane_configs[config_number-1].length; i++) {
+				d3.select(planes.nodes()[i]).transition()
+				.duration(reconfig_transition_duration)
+				//for convenience the coordinates refer to the center of the plane
+				.attr("x", centerXToPlane(plane_configs[config_number-1][i].x))
+				.attr("y", centerYToPlane(plane_configs[config_number-1][i].y));
+			}		
+		}*/
+
+		function movePlanesToFrontToConfig(config_number) {
+			for(var i=0; i<plane_configs[config_number-1].length; i++) {
+				d3.select(planes.nodes()[i]).transition()
+				.duration(reconfig_transition_duration)
+				//for convenience the coordinates in the JSON refer to the center of the plane
+				.attr("x", centerXToPlane(plane_configs[config_number-1][i].x))
+				.attr("y", centerYToPlane(plane_configs[config_number-1][i].y))
+				.attr("width", plane_width)
+				.attr("height", plane_height);
+			}		
+		}
+
+		function movePlanesToTheBackToConfig(config_number) {
+			for(var i=0; i<plane_configs[config_number-1].length; i++) {
+				d3.select(planes.nodes()[i]).transition()
+				.duration(reconfig_transition_duration)
+				//for convenience the coordinates in the JSON refer to the center of the plane
+				.attr("x", centerXToPlane(plane_configs[config_number-1][i].x))
+				.attr("y", centerYToPlane(plane_configs[config_number-1][i].y))
+				.attr("width", plane_width*2/3)
+				.attr("height", plane_height*2/3);
+			}		
+		}
+		
+		function movePlanesToNextConfig(planesToFront) {
+			if(current_config < plane_configs.length) {
+				current_config++;
+			} else {
+				current_config = 1;
+			}
+			console.log("moving planes to configuration #"+current_config);
+			//I can't run transactions concurrently on the same elements, so if I want to scale down/up planes
+			//while moving them I have to do that in the same transaction (otherwise I'd have scaled planes in 
+			//the planesInFront()/planesInTheBack() functions)
+			if(planesToFront === true) {
+				movePlanesToFrontToConfig(current_config);
+			}
+			if(planesToFront === false) {
+				movePlanesToTheBackToConfig(current_config);
+			}
+		}
+		
+		function clickedPlaneAndPressedX() {
+			planesInFront();
+			movePlanesToNextConfig(true);	
+		}
+			
+		function clickedPlaneAndPressedY() {
+			planesInTheBack();
+			movePlanesToNextConfig(false);	
+		}
+		
+	</script>
+</body>
+</html>
